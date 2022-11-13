@@ -1,6 +1,7 @@
 import random
 import matplotlib.pyplot as plt
 import numpy as np
+import networkx as nx
 
 #TODO: Quarantine, lockdowns, masks, percentage of who follows a lock down?
 
@@ -9,10 +10,12 @@ person_info = []
 persons = dict(person_info)
 stat_data = {}
 
+G = nx.Graph()
+
 #set up the simulator for use
 def initialize():
     global num_people
-    num_people = 500
+    num_people = 100
     #so we can use in other functions
     global people_infected
     people_infected = 4
@@ -23,14 +26,29 @@ def initialize():
         persons[i]['id'] = i
         persons[i]['infected'] = False
         persons[i]['immune'] = False
-        persons[i]['contacts'] = random.randint(1,10)
+        persons[i]['contacts'] = []
         persons[i]['infection_prob'] = 0
         persons[i]['when_infected'] = 0
         persons[i]['days_infected'] = 0
         persons[i]['how_many_infected'] = 0
         persons[i]['days_immune'] = 0
-    infect_person(people_infected)                        
-    run()
+
+    #Create our G(n,p) connections
+    for j in range(0, num_people):
+        #select our random people
+        #range between 0 and x iterate over how many times who we know
+        for k in range(0, random.randint(0, 6)):
+            who = random.randint(0, num_people-1)
+            #make sure we are duplicating nodes
+            if who in persons[j]['contacts'] or who == persons[j]['id']  :
+                pass
+            else:
+                persons[j]['contacts'].append(persons[who]['id'])
+                persons[who]['contacts'].append(persons[j]['id'])
+
+    #infect_person(people_infected)      
+    run_graph()                  
+    #run()
     
 def run():
     #our T rounds
@@ -44,13 +62,10 @@ def run():
     #Check if the days(rounds) comply too
     while(days_elapsed <= how_many_days-1):
 
-        if(people_infected > 0):
-            pass
-        else:
+        if(people_infected <= 0):
             break
 
         for i in range(0, len(persons)):
-    
             if(persons[i]['immune']):
                 if(persons[i]['days_immune'] < how_long_immune):
                     persons[i]['days_immune'] += 1
@@ -132,4 +147,22 @@ def infect_person(infect):
         persons[who]['infection_prob'] = round(random.uniform(0,1), 2)
         persons[who]['when_infected'] = 0
         stat_data[0] = infect #make sure we count our initial infected
-        print("Infected Person: " + str(persons[who])) 
+        #print("Infected Person: " + str(persons[who])) 
+
+
+def run_graph():
+    
+    nodes = []
+    edges = []
+
+    #loop to add nodes to the graph
+    for i in range(0 , len(persons)):
+        nodes.append(persons[i]['id'])
+        for edge in persons[i]['contacts']:
+            edges.append(tuple((persons[i]['id'], edge)))
+
+    G.add_nodes_from(nodes)
+    G.add_edges_from(edges)
+
+    nx.draw(G, with_labels = True)
+    plt.show()
