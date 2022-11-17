@@ -8,18 +8,33 @@ import networkx as nx
 #hold our persons in a nested dict
 person_info = []
 persons = dict(person_info)
-stat_data = {}
+infection_stat = {}
+healthy_stat = {}
+recovery_stat = {}
+
 
 G = nx.Graph()
 
 #set up the simulator for use
 def initialize():
     global num_people
-    num_people = 100
+    num_people = 1000
+    
     #so we can use in other functions
     global people_infected
-    people_infected = 4
+    people_infected = 10
     
+    global people_vaccinated
+    people_vaccinated = 0
+    
+    global healthy_people
+    healthy_people = num_people - people_infected
+    
+    global people_recovered
+    people_recovered = 0
+    
+    healthy_stat[0] = healthy_people
+        
     #populate the persons list 
     for i in range(0, num_people):
         persons[i] = {}
@@ -32,96 +47,118 @@ def initialize():
         persons[i]['days_infected'] = 0
         persons[i]['how_many_infected'] = 0
         persons[i]['days_immune'] = 0
+        persons[i]['vaccinated'] = False
+        persons[i]['recovered'] = False #If they recovered before the vaccine.
 
     #Create our G(n,p) connections
     for j in range(0, num_people):
         #select our random people
         #range between 0 and x iterate over how many times who we know
-        for k in range(0, random.randint(0, 6)):
+        friends_family = random.randint(0, 5)
+        for k in range(0, friends_family):
             who = random.randint(0, num_people-1)
             #make sure we are duplicating nodes
-            if who in persons[j]['contacts'] or who == persons[j]['id']  :
+            if who in persons[j]['contacts'] or who == persons[j]['id'] :
                 pass
             else:
                 persons[j]['contacts'].append(persons[who]['id'])
                 persons[who]['contacts'].append(persons[j]['id'])
 
-    #infect_person(people_infected)      
-    run_graph()                  
-    #run()
+    infect_person(people_infected)  
+    run()
     
 def run():
     #our T rounds
-    how_many_days = 200
+    how_many_days = 2000
     days_elapsed = 0
     chance_to_contact = 0.5 #higher the number the more contacts
-    chance_to_infect = 0.003 #higher the number less chance to get infected
-    how_long_infected = 5
+    chance_to_infect = 0.001 #higher the number less chance to get infected
+    how_long_infected = 8
     how_long_immune = 20
+    
+    vaccine_intro = 3 #random.randint(days_elapsed, how_many_days)
+    vaccine_chance = 0.4 # chance that a person can be vaccinated
+    take_vaccine = 0.6 #higher it is the less people will take it
+    
 
     #Check if the days(rounds) comply too
     while(days_elapsed <= how_many_days-1):
-
+        
         if(people_infected <= 0):
-            break
-
+           break
+        
         for i in range(0, len(persons)):
-            if(persons[i]['immune']):
-                if(persons[i]['days_immune'] < how_long_immune):
-                    persons[i]['days_immune'] += 1
-                else:
-                    persons[i]['immune'] = False
+            if days_elapsed >= vaccine_intro: 
+              select = random.randint(0,len(persons)-1)
+              if(persons[select]['infected'] == False and persons[select]['vaccinated'] == False):
+                    chance_for_vax = random.uniform(0,1) #chance that someone will get the vaccine for the invidiual person
+                    wants_vaccine = random.uniform(0, 1) #chance that our person 'wants' the vaccine
+                    if(persons[select]['recovered']):
+                        wants_vaccine = wants_vaccine / 2
+                    if(chance_for_vax >= vaccine_chance and wants_vaccine > take_vaccine):
+                        persons[select]['vaccinated'] = True
+                        globals()['people_vaccinated'] += 1
+            
+            ##Implement the vaccine model##
+            #if(persons[i]['immune']):
+                #if(persons[i]['days_immune'] < how_long_immune):
+                    #persons[i]['days_immune'] += 1
+                #else:
+                    #persons[i]['immune'] = False
 
             #Check our infected people
             #If our person has been infected for more than a certain time, make them immune
-            if(persons[i]['infected']):
+            if(persons[i]['infected'] and persons[i]['vaccinated'] == False):
                 if(persons[i]['days_infected'] < how_long_infected):
                     persons[i]['days_infected'] += 1
                 else:
+                    persons[i]['recovered'] = True
                     persons[i]['infected'] = False
-                    persons[i]['immune'] = True
+                    #persons[i]['immune'] = True
                     globals()['people_infected'] -= 1   
-            
-            if(persons[i]['infected'] and persons[i]['contacts'] > 0 and persons[i]['infection_prob'] >= chance_to_infect):
+                    globals()['people_recovered'] += 1
+             
+            if(persons[i]['infected'] and len(persons[i]['contacts']) > 0 and persons[i]['infection_prob'] > chance_to_infect):
 
-                #chance for somone to meet another person
-                could_meet_today = round(persons[i]['contacts'] * chance_to_contact)
-                     
+                #chance for somone to meet a person for a day(round)
+                
+                could_meet_today = np.floor((int(len(persons[i]['contacts']) * chance_to_contact))) #round down not up
+                
                 if(could_meet_today > 0 ):
-                    met_today = random.randint(0,could_meet_today)
+                    met_today = int(could_meet_today)
                 else:
                     met_today = 0
-
+                
+                #loop how many times through their node connections G(n, p)
                 for m in range(met_today):
-                    person_to_infect = persons[random.randint(0, len(persons)-1)]
+                    select_friend = persons[i]['contacts'][m]
+                    person_to_infect = persons[select_friend]
                     
                     #Don't want to double infect others and want to check if that person is immune
-                    if(person_to_infect['infected'] or person_to_infect['immune']):
+                    if(person_to_infect['infected'] or person_to_infect['immune'] or person_to_infect['vaccinated']):
                         pass
                     else:
                         person_to_infect['infected'] = True
                         person_to_infect['infection_prob'] = round(random.uniform(0,1), 2)
                         person_to_infect['when_infected'] = days_elapsed
                         persons[i]['how_many_infected'] += 1
-                        globals()['people_infected'] += 1   
+                        globals()['people_infected'] += 1  
+                        globals()['healthy_people'] -= 1 
                     
         days_elapsed += 1
         print(f"Day: {days_elapsed}, Number of people now infected: {people_infected}")
-        stat_data[days_elapsed] = people_infected #save our data for statisitcs, very simple right now
+        infection_stat[days_elapsed] = people_infected #save our data for statisitcs, very simple right now
+        healthy_stat[days_elapsed] = healthy_people
+        recovery_stat[days_elapsed] = people_recovered
     
-    print(f"Total infected {people_infected}") 
+    print(f"Infected {people_infected}") 
+    print(f"Total vaccinated {people_vaccinated}")
+    print(f"Total recovered {people_recovered}")
 
-    
-    debug_persons()
     print(calculate_R())
      
-    #simple stats, we should flesh out later, to assist with our report
-    x, y = zip(*stat_data.items())
-    plt.bar(x, y, color='r', width=1)
-    plt.title("Rate of Infection: Days per infection")
-    plt.ylabel("Infected")
-    plt.xlabel("Days")
-    plt.show()
+    #run_graph() Anything higher than 1000 of N, will crash the program (BE AWARE)
+    run_stats()
 
 def calculate_R():
     R = 0
@@ -134,24 +171,24 @@ def calculate_R():
         R /= total_infected
     return R
 
+#call this function to print out the list
 def debug_persons():
     for i in range(0, len(persons)):
         print(str(persons[i]) + "\n")
     
-
+#randomly select our infected
+#argument takes an integer which will be from 0-amount to infect 
 def infect_person(infect):
-    #randomly select our infected 
     for i in range(0, infect):
         who = random.randint(0, num_people-1)
         persons[who]['infected'] = True
         persons[who]['infection_prob'] = round(random.uniform(0,1), 2)
         persons[who]['when_infected'] = 0
-        stat_data[0] = infect #make sure we count our initial infected
-        #print("Infected Person: " + str(persons[who])) 
+        infection_stat[0] = infect #make sure we count our initial infected
+        print("Infected Person: " + str(persons[who])) 
 
-
+#TODO make it update and run while the program is a active
 def run_graph():
-    
     nodes = []
     edges = []
 
@@ -160,9 +197,25 @@ def run_graph():
         nodes.append(persons[i]['id'])
         for edge in persons[i]['contacts']:
             edges.append(tuple((persons[i]['id'], edge)))
+            
+                
 
     G.add_nodes_from(nodes)
     G.add_edges_from(edges)
 
     nx.draw(G, with_labels = True)
+    plt.show()
+    
+def run_stats():
+    #simple stats, we should flesh out later, to assist with our report
+    x, y = zip(*infection_stat.items()) #I(t)
+    b, z = zip(*healthy_stat.items()) #S(t)
+    a, g = zip(*recovery_stat.items()) #R(t)
+    plt.plot(x, y, color='r', label="Infected")
+    plt.plot(b, z, color='b', label="Healthy")
+    plt.plot(a, g, color='g', label="Recovered")
+    plt.title("Rate of Infection: Days per infection")
+    plt.ylabel("Infected")
+    plt.xlabel("Days")
+    plt.legend()
     plt.show()
