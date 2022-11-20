@@ -17,8 +17,11 @@ G = nx.Graph()
 
 #set up the simulator for use
 def initialize():
+    global lockdown
+    lockdown = False
+
     global num_people
-    num_people = 1000
+    num_people = 500
     
     #so we can use in other functions
     global people_infected
@@ -49,43 +52,48 @@ def initialize():
         persons[i]['days_immune'] = 0
         persons[i]['vaccinated'] = False
         persons[i]['recovered'] = False #If they recovered before the vaccine.
+        persons[i]['masked'] = False
+        persons[i]['attending_event'] = random.uniform(0, 1)
 
-    #Create our G(n,p) connections
-    for j in range(0, num_people):
-        #select our random people
-        #range between 0 and x iterate over how many times who we know
-        friends_family = random.randint(0, 5)
-        for k in range(0, friends_family):
-            who = random.randint(0, num_people-1)
-            #make sure we are duplicating nodes
-            if who in persons[j]['contacts'] or who == persons[j]['id'] :
-                pass
-            else:
-                persons[j]['contacts'].append(persons[who]['id'])
-                persons[who]['contacts'].append(persons[j]['id'])
+    #how many family/friends, chance of events to take place
+    connect_people(random.randint(0, 5), False)
 
     infect_person(people_infected)  
     run()
     
 def run():
     #our T rounds
-    how_many_days = 2000
+    how_many_days = 100
     days_elapsed = 0
-    chance_to_contact = 0.5 #higher the number the more contacts
-    chance_to_infect = 0.001 #higher the number less chance to get infected
-    how_long_infected = 8
-    how_long_immune = 20
+    chance_to_contact = 0.68 #higher the number the more contacts
+    chance_to_infect = 0.50 #higher the number less chance to get infected
+    how_long_infected = 5
+    #how_long_immune = 20
+    lockdown_when = 2
+    wear_masks = 0.5 #higher the number the more people that will wear masks 
     
     vaccine_intro = 3 #random.randint(days_elapsed, how_many_days)
     vaccine_chance = 0.4 # chance that a person can be vaccinated
     take_vaccine = 0.6 #higher it is the less people will take it
     
+    attend_event = 0.4 #attend an event for the total community
+    
 
     #Check if the days(rounds) comply too
     while(days_elapsed <= how_many_days-1):
+
+        chance_for_event = random.randint(0,1)#chance that an event will take place over the course of our sim. Accounts for randomness
         
+        #implement lockdown
+        if(days_elapsed == lockdown_when):
+            globals()['lockdown'] = True
+
+        #If people are all infected, stop the sim
         if(people_infected <= 0):
            break
+
+        if(lockdown == False and attend_event > chance_for_event):
+            connect_people(random.randint(1, 4), True)
         
         for i in range(0, len(persons)):
             if days_elapsed >= vaccine_intro: 
@@ -93,40 +101,44 @@ def run():
               if(persons[select]['infected'] == False and persons[select]['vaccinated'] == False):
                     chance_for_vax = random.uniform(0,1) #chance that someone will get the vaccine for the invidiual person
                     wants_vaccine = random.uniform(0, 1) #chance that our person 'wants' the vaccine
-                    if(persons[select]['recovered']):
-                        wants_vaccine = wants_vaccine / 2
                     if(chance_for_vax >= vaccine_chance and wants_vaccine > take_vaccine):
                         persons[select]['vaccinated'] = True
                         globals()['people_vaccinated'] += 1
+
             
-            ##Implement the vaccine model##
             #if(persons[i]['immune']):
                 #if(persons[i]['days_immune'] < how_long_immune):
                     #persons[i]['days_immune'] += 1
                 #else:
-                    #persons[i]['immune'] = False
+                   # persons[i]['immune'] = False
 
             #Check our infected people
             #If our person has been infected for more than a certain time, make them immune
-            if(persons[i]['infected'] and persons[i]['vaccinated'] == False):
+            if(persons[i]['infected'] and (persons[i]['vaccinated'] == False)):
                 if(persons[i]['days_infected'] < how_long_infected):
                     persons[i]['days_infected'] += 1
                 else:
-                    persons[i]['recovered'] = True
                     persons[i]['infected'] = False
+                    persons[i]['recovered'] = True
                     #persons[i]['immune'] = True
                     globals()['people_infected'] -= 1   
                     globals()['people_recovered'] += 1
-             
+
+            #masks
+            if(random.uniform(0,1) < wear_masks):
+               persons[i]['masked'] = True
+               persons[i]['infection_prob'] /= 2
+            
             if(persons[i]['infected'] and len(persons[i]['contacts']) > 0 and persons[i]['infection_prob'] > chance_to_infect):
 
-                #chance for somone to meet a person for a day(round)
-                
                 could_meet_today = np.floor((int(len(persons[i]['contacts']) * chance_to_contact))) #round down not up
                 
                 if(could_meet_today > 0 ):
                     met_today = int(could_meet_today)
                 else:
+                    met_today = 0
+                
+                if(lockdown):
                     met_today = 0
                 
                 #loop how many times through their node connections G(n, p)
@@ -135,7 +147,7 @@ def run():
                     person_to_infect = persons[select_friend]
                     
                     #Don't want to double infect others and want to check if that person is immune
-                    if(person_to_infect['infected'] or person_to_infect['immune'] or person_to_infect['vaccinated']):
+                    if(person_to_infect['infected'] or person_to_infect['recovered'] or person_to_infect['vaccinated']):
                         pass
                     else:
                         person_to_infect['infected'] = True
@@ -198,8 +210,6 @@ def run_graph():
         for edge in persons[i]['contacts']:
             edges.append(tuple((persons[i]['id'], edge)))
             
-                
-
     G.add_nodes_from(nodes)
     G.add_edges_from(edges)
 
@@ -219,3 +229,26 @@ def run_stats():
     plt.xlabel("Days")
     plt.legend()
     plt.show()
+
+def connect_people(friends_family, occur):
+   
+    should_attend = 0.5
+
+    #Create our G(n,p) connections
+    for j in range(0, num_people):
+
+        #if we are attending an event with a chance of greater than 
+        if(occur == True and persons[j]['attending_event'] > should_attend):
+            #simulate more connections with others, allowing for more social actitives 
+            #Set event_occurence to 0, to not allow social activities to occur
+            friends_family * 2 
+        #select our random people
+        #range between 0 and x iterate over how many times who we know
+        for k in range(0, friends_family):
+            who = random.randint(0, num_people-1)
+            #make sure we are not duplicating nodes
+            if who in persons[j]['contacts'] or who == persons[j]['id'] :
+                pass
+            else:
+                persons[j]['contacts'].append(persons[who]['id'])
+                persons[who]['contacts'].append(persons[j]['id'])
