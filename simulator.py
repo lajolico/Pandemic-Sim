@@ -21,7 +21,7 @@ def initialize():
     lockdown = False
 
     global num_people
-    num_people = 500
+    num_people = 50
     
     #so we can use in other functions
     global people_infected
@@ -49,7 +49,6 @@ def initialize():
         persons[i]['when_infected'] = 0
         persons[i]['days_infected'] = 0
         persons[i]['how_many_infected'] = 0
-        persons[i]['days_immune'] = 0
         persons[i]['vaccinated'] = False
         persons[i]['recovered'] = False #If they recovered before the vaccine.
         persons[i]['masked'] = False
@@ -58,18 +57,19 @@ def initialize():
     #how many family/friends, chance of events to take place
     connect_people(random.randint(0, 5), False)
 
-    infect_person(people_infected)  
+    infect_person(people_infected)
+    #run_graph()
     run()
     
 def run():
     #our T rounds
-    how_many_days = 100
+    how_many_days = 2000
     days_elapsed = 0
     chance_to_contact = 0.68 #higher the number the more contacts
     chance_to_infect = 0.50 #higher the number less chance to get infected
     how_long_infected = 5
     #how_long_immune = 20
-    lockdown_when = 2
+    lockdown_when = 5
     wear_masks = 0.5 #higher the number the more people that will wear masks 
     
     vaccine_intro = 3 #random.randint(days_elapsed, how_many_days)
@@ -85,8 +85,8 @@ def run():
         chance_for_event = random.randint(0,1)#chance that an event will take place over the course of our sim. Accounts for randomness
         
         #implement lockdown
-        if(days_elapsed == lockdown_when):
-            globals()['lockdown'] = True
+        #if(days_elapsed == lockdown_when):
+            #globals()['lockdown'] = True
 
         #If people are all infected, stop the sim
         if(people_infected <= 0):
@@ -105,13 +105,6 @@ def run():
                         persons[select]['vaccinated'] = True
                         globals()['people_vaccinated'] += 1
 
-            
-            #if(persons[i]['immune']):
-                #if(persons[i]['days_immune'] < how_long_immune):
-                    #persons[i]['days_immune'] += 1
-                #else:
-                   # persons[i]['immune'] = False
-
             #Check our infected people
             #If our person has been infected for more than a certain time, make them immune
             if(persons[i]['infected'] and (persons[i]['vaccinated'] == False)):
@@ -120,7 +113,6 @@ def run():
                 else:
                     persons[i]['infected'] = False
                     persons[i]['recovered'] = True
-                    #persons[i]['immune'] = True
                     globals()['people_infected'] -= 1   
                     globals()['people_recovered'] += 1
 
@@ -168,8 +160,9 @@ def run():
     print(f"Total recovered {people_recovered}")
 
     print(calculate_R())
+    
      
-    #run_graph() Anything higher than 1000 of N, will crash the program (BE AWARE)
+    run_graph() #Anything higher than 1000 of N, will crash the program (BE AWARE)
     run_stats()
 
 def calculate_R():
